@@ -1,18 +1,17 @@
-use crate::ContractError;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Decimal, Decimal256, Storage, Timestamp, Uint128, Uint64};
 use cw_storage_plus::{Item, Map};
-use std::ops::Mul;
 
 #[cw_serde]
 pub struct Config {
     pub admin: Addr,
-    pub batch_duration: u64,
-    pub batch_amount: u64,
+    pub batch_duration: Uint128,
+    pub batch_amount: Uint128,
     pub revenue_collector: String,
     pub price: Decimal,
     pub buy_denom: String,
     pub sell_denom: String,
+    pub first_batch_release_time: Timestamp,
 }
 pub const CONFIG: Item<Config> = Item::new("config");
 
@@ -38,10 +37,12 @@ pub const STATE: Item<State> = Item::new("state");
 
 #[cw_serde]
 pub struct Batch{
-    amount: Uint128,
-    release_time: Timestamp,
-    released: bool,
+    pub amount: Uint128,
+    pub release_time: Timestamp,
+    pub released: bool,
 }
+pub type  Bathces = Vec<Batch>;
+
 
 #[cw_serde]
 pub struct Position {
@@ -50,7 +51,7 @@ pub struct Position {
     pub price: Decimal,
     pub timestamp: Timestamp,
     // vector of batches
-    pub batches: Vec<Batch>,
+    pub batches: Bathces,
 }
 pub const POSITIONS: Map<Addr,Position> = Map::new("positions");
 

@@ -26,4 +26,7 @@ pub enum ContractError {
 
     #[error("{0}")]
     ConversionOverflowError(#[from] ConversionOverflowError),
+
+    #[error("Sale is not active")]
+    SaleNotActive {}
 }

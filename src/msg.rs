@@ -1,17 +1,19 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Decimal;
+use cosmwasm_std::{Decimal, Timestamp, Uint128};
 
 #[cw_serde]
 pub struct InstantiateMsg {
     pub admin: Option<String>,
-    pub batch_duration: u64,
-    pub batch_amount: u64,
+    pub batch_duration: Uint128,
+    pub batch_amount: Uint128,
     pub revenue_collector: String,
     pub price: Decimal,
     // In this case buy_denom is native token
     pub buy_denom: String,
     // In this case sell_denom is cw20 token
     pub sell_denom: String,
+    // First batch release time. This shouldnt be changed once sale is started.
+    pub first_batch_release_time: Timestamp,
 }
 
 #[cw_serde]
@@ -19,18 +21,18 @@ pub enum ExecuteMsg {
     Buy {},
     UpdateConfig {
         admin: Option<String>,
-        batch_duration: Option<u64>,
-        batch_amount: Option<u64>,
+        batch_duration: Option<Uint128>,
+        batch_amount: Option<Uint128>,
         revenue_collector: Option<String>,
         price: Option<Decimal>,
         buy_denom: Option<String>,
         sell_denom: Option<String>,
     },
     StartDistribution {},
-    // withdraw remaning cw20 tokens. Checks balance and sends remaining tokens to admin
+    // Withdraw remaning cw20 tokens. Checks balance and sends remaining tokens to admin
     AdminWithdraw{
-    }
-    
+    },
+    StartSale {},
     
     }
 

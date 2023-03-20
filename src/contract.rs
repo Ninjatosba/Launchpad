@@ -3,9 +3,10 @@ use cosmwasm_std::entry_point;
 use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, attr, Uint128, Decimal};
 // use cw2::set_contract_version;
 use cw_utils::{maybe_addr, must_pay};
+use crate::batch::create_batches;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, self};
-use crate::state::{Config, CONFIG, STATE, State, POSITIONS, Position, Status};
+use crate::state::{Config, CONFIG, STATE, State, POSITIONS, Position, Status, Bathces, Batch};
 
 
 // version info for migration info
@@ -32,6 +33,7 @@ pub fn instantiate(
         price: msg.price,
         buy_denom: msg.buy_denom,
         sell_denom: msg.sell_denom,
+        first_batch_release_time: msg.first_batch_release_time,
     };
 
     let state = State {
@@ -87,6 +89,7 @@ pub fn execute(
             buy_denom,
             sell_denom,
         ),
+        ExecuteMsg::StartSale {} => execute_start_sale(deps, env, info),
         ExecuteMsg::StartDistribution {} => execute_start_distribution(deps, env, info),
         ExecuteMsg::AdminWithdraw {} => execute_admin_withdraw(deps, env, info),
 
@@ -102,6 +105,10 @@ pub fn execute_buy(
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let state = STATE.load(deps.storage)?;
+    // Check if sale is active
+    if state.status != Status::Active {
+        return Err(ContractError::SaleNotActive {});
+    }
 
     let amount = must_pay(&info,&config.buy_denom)?;
     let buy_amount = Decimal::from_ratio(amount, Uint128::from(1u128)).checked_mul(config.price).unwrap();
@@ -109,6 +116,7 @@ pub fn execute_buy(
     let buy_amount = Uint128::from(buy_amount.to_uint_floor());
 
     let position = POSITIONS.may_load(deps.storage, info.sender)?;
+    let batches:Bathces = create_batches( config.batch_duration, config.batch_amount, buy_amount, config.first_batch_release_time)?;
     let mut position = match position {
         Some(p) => p,
         None => Position {
@@ -116,7 +124,7 @@ pub fn execute_buy(
             total_amount: Uint128::zero(),
             price: Decimal::zero(),
             timestamp: env.block.time,
-            batches: vec![],
+            batches:batches
         },
     };
 
