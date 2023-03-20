@@ -1,8 +1,8 @@
-use thiserror::Error;
-use cosmwasm_std::{ConversionOverflowError, DivideByZeroError, OverflowError, StdError,};
+use cosmwasm_std::{ConversionOverflowError, DivideByZeroError, OverflowError, StdError};
+use cw_asset::AssetError;
 use cw_utils::PaymentError;
 use std::convert::Infallible;
-
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ContractError {
@@ -28,5 +28,22 @@ pub enum ContractError {
     ConversionOverflowError(#[from] ConversionOverflowError),
 
     #[error("Sale is not active")]
-    SaleNotActive {}
+    SaleNotActive {},
+
+    #[error("Sale can not be started because it is either active or distribution")]
+    SaleNotPending {},
+
+    #[error("Sale is not in distribution state")]
+    SaleNotDistribution {},
+
+    #[error("Insufficient balance")]
+    InsufficientBalance {},
+    #[error("Asset error")]
+    AssetError {},
+}
+
+impl From<AssetError> for ContractError {
+    fn from(_err: AssetError) -> Self {
+        ContractError::AssetError {}
+    }
 }

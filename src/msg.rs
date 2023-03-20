@@ -30,11 +30,11 @@ pub enum ExecuteMsg {
     },
     StartDistribution {},
     // Withdraw remaning cw20 tokens. Checks balance and sends remaining tokens to admin
-    AdminWithdraw{
+    AdminWithdraw {
+        amount: Uint128,
     },
     StartSale {},
-    
-    }
+}
 
 #[cw_serde]
 #[derive(QueryResponses)]
