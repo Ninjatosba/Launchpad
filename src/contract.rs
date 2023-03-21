@@ -1,18 +1,15 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, to_binary, wasm_execute, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, Uint128, WasmQuery,
+    attr, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
 };
-use cw20::{Cw20ExecuteMsg, Cw20QueryMsg};
+use cw20::Cw20QueryMsg;
 use cw_asset::Asset;
 // use cw2::set_contract_version;
 use crate::batch::{create_batches, update_batches};
 use crate::error::ContractError;
-use crate::msg::{self, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{
-    self, Batch, Bathces, Config, Position, State, Status, CONFIG, POSITIONS, STATE,
-};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::state::{Batch, Bathces, Config, Position, State, Status, CONFIG, POSITIONS, STATE};
 use cw_utils::{maybe_addr, must_pay};
 
 // version info for migration info
@@ -95,6 +92,7 @@ pub fn execute(
         ExecuteMsg::StartSale {} => execute_start_sale(deps, env, info),
         ExecuteMsg::StartDistribution {} => execute_start_distribution(deps, env, info),
         ExecuteMsg::AdminWithdraw { amount } => execute_admin_withdraw(deps, env, info, amount),
+        ExecuteMsg::Claim {} => execute_claim(deps, env, info),
     }
 }
 
@@ -106,8 +104,8 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
         return Err(ContractError::SaleNotActive {});
     }
 
-    let amount = must_pay(&info, &config.buy_denom)?;
-    let buy_amount = Decimal::from_ratio(amount, Uint128::from(1u128))
+    let amount_paid = must_pay(&info, &config.buy_denom)?;
+    let buy_amount = Decimal::from_ratio(amount_paid, Uint128::from(1u128))
         .checked_mul(config.price)
         .unwrap();
     // floor buy_amount
@@ -117,8 +115,8 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
         Some(mut position) => {
             // if position does exist, add buy_amount to total_bought and total_paid and update batches
             position.total_bought += buy_amount;
-            position.total_paid += amount;
-            let new_batches = update_batches(position.batches, amount, config.batch_amount)?;
+            position.total_paid += amount_paid;
+            let new_batches = update_batches(position.batches, amount_paid, config.batch_amount)?;
             position.batches = new_batches;
             position
         }
@@ -133,16 +131,23 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
             Position {
                 address: info.sender,
                 total_bought: buy_amount,
-                total_paid: amount,
+                total_paid: amount_paid,
                 price: config.price,
                 timestamp: env.block.time,
                 batches: batches,
             }
         }
     };
+    // Send revenue to revenue_collector
+    let revenue_asset = Asset::native(config.buy_denom, amount_paid);
+    let revenue_msg = revenue_asset.transfer_msg(config.revenue_collector.clone())?;
 
-    let mut res = Response::default();
-    res.attributes = vec![attr("action", "buy"), attr("amount", amount.to_string())];
+    let mut res = Response::default()
+        .add_message(revenue_msg)
+        .add_attribute("action", "buy")
+        .add_attribute("amount_paid", amount_paid)
+        .add_attribute("buy_amount", buy_amount);
+
     Ok(res)
 }
 
@@ -160,12 +165,14 @@ pub fn execute_update_config(
 ) -> Result<Response, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
     let state = STATE.load(deps.storage)?;
+
     if info.sender != config.admin {
         return Err(ContractError::Unauthorized {});
     }
     if let Some(admin) = admin {
         config.admin = deps.api.addr_validate(&admin)?;
     }
+
     if let Some(batch_duration) = batch_duration {
         if state.status == Status::Pending {
             config.batch_duration = batch_duration;
@@ -294,10 +301,58 @@ pub fn execute_admin_withdraw(
 
     Ok(res)
 }
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
-    unimplemented!()
+
+pub fn execute_claim(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+) -> Result<Response, ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+    let mut state = STATE.load(deps.storage)?;
+    if state.status != Status::Distribution {
+        return Err(ContractError::SaleNotDistribution {});
+    }
+    let mut position = POSITIONS.load(deps.storage, info.sender.clone())?;
+    // check if is there any batch to claim
+    let mature_claims: Vec<Batch> = position
+        .clone()
+        .batches
+        .into_iter()
+        .filter(|batch| batch.release_time < env.block.time)
+        .collect();
+
+    if mature_claims.is_empty() {
+        return Err(ContractError::NoMatureClaims {});
+    }
+    // remove mature claims from position
+    position
+        .batches
+        .retain(|batch| batch.release_time >= env.block.time);
+
+    // save position
+    POSITIONS.save(deps.storage, info.sender.clone(), &position)?;
+
+    // calculate total amount to claim
+    let total_amount: Uint128 = mature_claims
+        .into_iter()
+        .map(|batch| batch.amount)
+        .sum::<Uint128>();
+
+    let claim_asset = Asset::cw20(config.sell_denom, total_amount);
+    let claim_msg = claim_asset.transfer_msg(info.sender)?;
+
+    let mut res = Response::default()
+        .add_attributes(vec![
+            attr("action", "claim"),
+            attr("amount", total_amount.to_string()),
+        ])
+        .add_message(claim_msg);
+
+    Ok(res)
 }
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {}
 
 #[cfg(test)]
 mod tests {}

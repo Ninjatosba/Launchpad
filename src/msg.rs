@@ -34,6 +34,7 @@ pub enum ExecuteMsg {
         amount: Uint128,
     },
     StartSale {},
+    Claim {},
 }
 
 #[cw_serde]

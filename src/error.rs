@@ -40,6 +40,9 @@ pub enum ContractError {
     InsufficientBalance {},
     #[error("Asset error")]
     AssetError {},
+
+    #[error("User has no vesting token unlocked")]
+    NoMatureClaims {},
 }
 
 impl From<AssetError> for ContractError {
