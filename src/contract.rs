@@ -119,7 +119,7 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
         .unwrap();
     // floor buy_amount
     let buy_amount = buy_amount.to_uint_floor();
-    let mut position = POSITIONS.may_load(deps.storage, info.sender.clone())?;
+    let position = POSITIONS.may_load(deps.storage, info.sender.clone())?;
     let new_position = match position {
         Some(mut position) => {
             // if position does exist, add buy_amount to total_bought and total_paid and update batches
@@ -147,7 +147,7 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
             }
         }
     };
-    POSITIONS.save(deps.storage, info.sender.clone(), &new_position)?;
+    POSITIONS.save(deps.storage, info.sender, &new_position)?;
     // update state
     state.total_sold += buy_amount;
     state.total_revenue += amount_paid;
@@ -338,8 +338,7 @@ pub fn execute_claim(
         .into_iter()
         .filter(|batch| batch.release_time < env.block.time)
         .collect();
-    println!("env.block.time: {:?}", env.block.time);
-    println!("mature_claims: {:?}", mature_claims);
+
     if mature_claims.is_empty() {
         return Err(ContractError::NoMatureClaims {});
     }
@@ -404,7 +403,7 @@ pub fn query_state(deps: Deps) -> StdResult<QueryStateResponse> {
 
 pub fn query_position(deps: Deps, address: String) -> StdResult<QueryPositionResponse> {
     let addr = deps.api.addr_validate(&address)?;
-    println!("address: {}", addr);
+
     let position = POSITIONS.load(deps.storage, addr)?;
     Ok(QueryPositionResponse {
         address: position.address.to_string(),
