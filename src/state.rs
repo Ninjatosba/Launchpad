@@ -26,6 +26,16 @@ pub enum Status {
     // Distribution has started
     Distribution,
 }
+// implement to_string for Status
+impl ToString for Status {
+    fn to_string(&self) -> String {
+        match self {
+            Status::Pending => "pending".to_string(),
+            Status::Active => "active".to_string(),
+            Status::Distribution => "distribution".to_string(),
+        }
+    }
+}
 
 #[cw_serde]
 pub struct State {

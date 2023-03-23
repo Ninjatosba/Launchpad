@@ -1,14 +1,17 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
+    attr, to_binary, Binary, Decimal, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
 };
 use cw20::Cw20QueryMsg;
 use cw_asset::Asset;
 // use cw2::set_contract_version;
 use crate::batch::{create_batches, update_batches};
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{
+    ExecuteMsg, InstantiateMsg, QueryConfigResponse, QueryMsg, QueryPositionResponse,
+    QueryStateResponse,
+};
 use crate::state::{Batch, Bathces, Config, Position, State, Status, CONFIG, POSITIONS, STATE};
 use cw_utils::{maybe_addr, must_pay};
 
@@ -352,7 +355,46 @@ pub fn execute_claim(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {}
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::QueryConfig {} => to_binary(&query_config(deps)?),
+        QueryMsg::QueryState {} => to_binary(&query_state(deps)?),
+        QueryMsg::QueryPosition { address } => to_binary(&query_position(deps, address)?),
+    }
+}
 
-#[cfg(test)]
-mod tests {}
+pub fn query_config(deps: Deps) -> StdResult<QueryConfigResponse> {
+    let config = CONFIG.load(deps.storage)?;
+    Ok(QueryConfigResponse {
+        admin: config.admin.to_string(),
+        batch_duration: config.batch_duration,
+        batch_amount: config.batch_amount,
+        revenue_collector: config.revenue_collector.to_string(),
+        price: config.price,
+        buy_denom: config.buy_denom,
+        sell_denom: config.sell_denom.to_string(),
+        first_batch_release_time: config.first_batch_release_time,
+    })
+}
+
+pub fn query_state(deps: Deps) -> StdResult<QueryStateResponse> {
+    let state = STATE.load(deps.storage)?;
+    Ok(QueryStateResponse {
+        status: state.status.to_string(),
+        total_sold: state.total_sold,
+        total_revenue: state.total_revenue,
+    })
+}
+
+pub fn query_position(deps: Deps, address: String) -> StdResult<QueryPositionResponse> {
+    let addr = deps.api.addr_validate(&address)?;
+    let position = POSITIONS.load(deps.storage, addr)?;
+    Ok(QueryPositionResponse {
+        address: position.address.to_string(),
+        total_bought: position.total_bought,
+        total_paid: position.total_paid,
+        price: position.price,
+        timestamp: position.timestamp,
+        batches: position.batches,
+    })
+}
