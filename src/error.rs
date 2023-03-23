@@ -4,7 +4,7 @@ use cw_utils::PaymentError;
 use std::convert::Infallible;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
@@ -43,6 +43,9 @@ pub enum ContractError {
 
     #[error("User has no vesting token unlocked")]
     NoMatureClaims {},
+
+    #[error("Price can not be zero or negative")]
+    InvalidPrice {},
 }
 
 impl From<AssetError> for ContractError {

@@ -24,6 +24,11 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     let admin = maybe_addr(deps.api, msg.admin)?.unwrap_or_else(|| info.sender.clone());
 
+    // check price
+    if msg.price.is_zero() {
+        return Err(ContractError::InvalidPrice {});
+    }
+
     let config = Config {
         admin,
         batch_duration: msg.batch_duration,
@@ -55,6 +60,10 @@ pub fn instantiate(
         attr("price", config.price.to_string()),
         attr("buy_denom", config.buy_denom),
         attr("sell_denom", config.sell_denom),
+        attr(
+            "first_batch_release_time",
+            config.first_batch_release_time.to_string(),
+        ),
     ];
     Ok(res)
 }
@@ -97,7 +106,7 @@ pub fn execute(
 
 pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
+    let mut state = STATE.load(deps.storage)?;
     // Check if sale is active
     if state.status != Status::Active {
         return Err(ContractError::SaleNotActive {});
@@ -105,17 +114,18 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
 
     let amount_paid = must_pay(&info, &config.buy_denom)?;
     let buy_amount = Decimal::from_ratio(amount_paid, Uint128::from(1u128))
-        .checked_mul(config.price)
+        .checked_div(config.price)
+        //price or amount can not be zero so its safe to unwrap
         .unwrap();
     // floor buy_amount
     let buy_amount = buy_amount.to_uint_floor();
-    let position = POSITIONS.may_load(deps.storage, info.sender.clone())?;
-    let _position = match position {
+    let mut position = POSITIONS.may_load(deps.storage, info.sender.clone())?;
+    let new_position = match position {
         Some(mut position) => {
             // if position does exist, add buy_amount to total_bought and total_paid and update batches
             position.total_bought += buy_amount;
             position.total_paid += amount_paid;
-            let new_batches = update_batches(position.batches, amount_paid, config.batch_amount)?;
+            let new_batches = update_batches(position.batches, buy_amount, config.batch_amount)?;
             position.batches = new_batches;
             position
         }
@@ -128,7 +138,7 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
                 config.first_batch_release_time,
             )?;
             Position {
-                address: info.sender,
+                address: info.sender.clone(),
                 total_bought: buy_amount,
                 total_paid: amount_paid,
                 price: config.price,
@@ -137,6 +147,11 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
             }
         }
     };
+    POSITIONS.save(deps.storage, info.sender.clone(), &new_position)?;
+    // update state
+    state.total_sold += buy_amount;
+    state.total_revenue += amount_paid;
+    STATE.save(deps.storage, &state)?;
     // Send revenue to revenue_collector
     let revenue_asset = Asset::native(config.buy_denom, amount_paid);
     let revenue_msg = revenue_asset.transfer_msg(config.revenue_collector)?;
@@ -190,6 +205,10 @@ pub fn execute_update_config(
         config.revenue_collector = deps.api.addr_validate(&revenue_collector)?;
     }
     if let Some(price) = price {
+        // check price
+        if price.is_zero() {
+            return Err(ContractError::InvalidPrice {});
+        }
         config.price = price;
     }
     if let Some(buy_denom) = buy_denom {
@@ -283,13 +302,13 @@ pub fn execute_admin_withdraw(
             address: env.contract.address.to_string(),
         },
     )?;
+
     if cw20_balance < amount {
         return Err(ContractError::InsufficientBalance {});
     }
 
     let withdraw_asset = Asset::cw20(config.sell_denom, amount);
     let withdraw_msg = withdraw_asset.transfer_msg(info.sender)?;
-    // refactor bellow
 
     let res = Response::default()
         .add_attributes(vec![
@@ -319,7 +338,8 @@ pub fn execute_claim(
         .into_iter()
         .filter(|batch| batch.release_time < env.block.time)
         .collect();
-
+    println!("env.block.time: {:?}", env.block.time);
+    println!("mature_claims: {:?}", mature_claims);
     if mature_claims.is_empty() {
         return Err(ContractError::NoMatureClaims {});
     }
@@ -384,6 +404,7 @@ pub fn query_state(deps: Deps) -> StdResult<QueryStateResponse> {
 
 pub fn query_position(deps: Deps, address: String) -> StdResult<QueryPositionResponse> {
     let addr = deps.api.addr_validate(&address)?;
+    println!("address: {}", addr);
     let position = POSITIONS.load(deps.storage, addr)?;
     Ok(QueryPositionResponse {
         address: position.address.to_string(),

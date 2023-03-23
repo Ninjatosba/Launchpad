@@ -1,4 +1,4 @@
-use cosmwasm_schema::{cw_serde};
+use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Decimal, Timestamp, Uint128};
 
 use crate::state::Batch;
@@ -6,9 +6,13 @@ use crate::state::Batch;
 #[cw_serde]
 pub struct InstantiateMsg {
     pub admin: Option<String>,
+    // Batch duration in nanoseconds
     pub batch_duration: Uint128,
+    // Batch amount eg. 10 batches, duration= x nanoseconds total duration = 10x
     pub batch_amount: Uint128,
+
     pub revenue_collector: String,
+    // Price of cw20 token in native token
     pub price: Decimal,
     // In this case buy_denom is native token
     pub buy_denom: String,
