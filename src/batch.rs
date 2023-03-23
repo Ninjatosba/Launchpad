@@ -37,12 +37,12 @@ pub fn update_batches(
     let new_batces = batches
         .iter()
         .map(|batch| {
-            let new_batch = Batch {
+            
+            Batch {
                 amount: batch.amount.add(amount / batch_amount),
                 release_time: batch.release_time,
                 released: false,
-            };
-            new_batch
+            }
         })
         .collect();
     Ok(new_batces)

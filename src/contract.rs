@@ -15,21 +15,17 @@ use crate::msg::{
 use crate::state::{Batch, Bathces, Config, Position, State, Status, CONFIG, POSITIONS, STATE};
 use cw_utils::{maybe_addr, must_pay};
 
-// version info for migration info
-const CONTRACT_NAME: &str = "crates.io:launchpad";
-const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let admin = maybe_addr(deps.api, msg.admin)?.unwrap_or_else(|| info.sender.clone());
 
     let config = Config {
-        admin: admin,
+        admin,
         batch_duration: msg.batch_duration,
         batch_amount: msg.batch_amount,
         revenue_collector: deps.api.addr_validate(&msg.revenue_collector)?,
@@ -112,9 +108,9 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
         .checked_mul(config.price)
         .unwrap();
     // floor buy_amount
-    let buy_amount = Uint128::from(buy_amount.to_uint_floor());
+    let buy_amount = buy_amount.to_uint_floor();
     let position = POSITIONS.may_load(deps.storage, info.sender.clone())?;
-    let mut position = match position {
+    let _position = match position {
         Some(mut position) => {
             // if position does exist, add buy_amount to total_bought and total_paid and update batches
             position.total_bought += buy_amount;
@@ -137,15 +133,15 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
                 total_paid: amount_paid,
                 price: config.price,
                 timestamp: env.block.time,
-                batches: batches,
+                batches,
             }
         }
     };
     // Send revenue to revenue_collector
     let revenue_asset = Asset::native(config.buy_denom, amount_paid);
-    let revenue_msg = revenue_asset.transfer_msg(config.revenue_collector.clone())?;
+    let revenue_msg = revenue_asset.transfer_msg(config.revenue_collector)?;
 
-    let mut res = Response::default()
+    let res = Response::default()
         .add_message(revenue_msg)
         .add_attribute("action", "buy")
         .add_attribute("amount_paid", amount_paid)
@@ -153,10 +149,10 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
 
     Ok(res)
 }
-
+#[allow(clippy::too_many_arguments)]
 pub fn execute_update_config(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     admin: Option<String>,
     batch_duration: Option<Uint128>,
@@ -228,10 +224,10 @@ pub fn execute_update_config(
 
 pub fn execute_start_sale(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
 ) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
+    let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
     if info.sender != config.admin {
         return Err(ContractError::Unauthorized {});
@@ -248,10 +244,10 @@ pub fn execute_start_sale(
 
 pub fn execute_start_distribution(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
 ) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
+    let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
     if info.sender != config.admin {
         return Err(ContractError::Unauthorized {});
@@ -272,8 +268,8 @@ pub fn execute_admin_withdraw(
     info: MessageInfo,
     amount: Uint128,
 ) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
+    let config = CONFIG.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
     if info.sender != config.admin {
         return Err(ContractError::Unauthorized {});
     }
@@ -295,7 +291,7 @@ pub fn execute_admin_withdraw(
     let withdraw_msg = withdraw_asset.transfer_msg(info.sender)?;
     // refactor bellow
 
-    let mut res = Response::default()
+    let res = Response::default()
         .add_attributes(vec![
             attr("action", "admin_withdraw"),
             attr("amount", amount.to_string()),
@@ -310,8 +306,8 @@ pub fn execute_claim(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
+    let config = CONFIG.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
     if state.status != Status::Distribution {
         return Err(ContractError::SaleNotDistribution {});
     }
@@ -344,7 +340,7 @@ pub fn execute_claim(
     let claim_asset = Asset::cw20(config.sell_denom, total_amount);
     let claim_msg = claim_asset.transfer_msg(info.sender)?;
 
-    let mut res = Response::default()
+    let res = Response::default()
         .add_attributes(vec![
             attr("action", "claim"),
             attr("amount", total_amount.to_string()),
@@ -355,7 +351,7 @@ pub fn execute_claim(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::QueryConfig {} => to_binary(&query_config(deps)?),
         QueryMsg::QueryState {} => to_binary(&query_state(deps)?),
