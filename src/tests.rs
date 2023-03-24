@@ -323,4 +323,65 @@ mod tests {
         assert_eq!(position.batches.len(), 0);
         assert_eq!(position.total_claimed, Uint128::from(8870u128));
     }
+
+    #[test]
+    pub fn test_update_config() {
+        // init
+        let mut deps = mock_dependencies();
+        let info = mock_info("creator", &[]);
+        let env = mock_env();
+        let msg = default_init_msg();
+        let res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
+        // random update config
+        let info = mock_info("random", &[]);
+        let msg = ExecuteMsg::UpdateConfig {
+            admin: None,
+            batch_duration: Some(Uint128::from(12u128)),
+            revenue_collector: None,
+            buy_denom: None,
+            sell_denom: None,
+            batch_amount: None,
+            price: None,
+        };
+        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone());
+        assert_eq!(res.unwrap_err(), ContractError::Unauthorized {});
+
+        // update config
+        let info = mock_info("creator", &[]);
+        let msg = ExecuteMsg::UpdateConfig {
+            admin: None,
+            batch_duration: Some(Uint128::from(12u128)),
+            revenue_collector: None,
+            buy_denom: None,
+            sell_denom: None,
+            batch_amount: None,
+            price: None,
+        };
+        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+        // check config
+        let config: QueryConfigResponse =
+            from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::QueryConfig {}).unwrap())
+                .unwrap();
+        assert_eq!(config.batch_duration, Uint128::from(12u128));
+
+        // start sale
+        let info = mock_info("creator", &[]);
+        let msg = ExecuteMsg::StartSale {};
+        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
+
+        // update config
+        let info = mock_info("creator", &[]);
+        let msg = ExecuteMsg::UpdateConfig {
+            admin: None,
+            batch_duration: Some(Uint128::from(12u128)),
+            revenue_collector: None,
+            buy_denom: None,
+            sell_denom: None,
+            batch_amount: None,
+            price: None,
+        };
+        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap_err();
+        assert_eq!(res, ContractError::SaleNotPending {});
+    }
 }
