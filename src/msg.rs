@@ -18,7 +18,7 @@ pub struct InstantiateMsg {
     pub buy_denom: String,
     // In this case sell_denom is cw20 token
     pub sell_denom: String,
-    // First batch release time. This shouldnt be changed once sale is started.
+    // First batch release time. This shouldnt be changed once the sale is started.
     pub first_batch_release_time: Timestamp,
 }
 
@@ -54,6 +54,7 @@ pub struct QueryPositionResponse {
     pub address: String,
     pub total_bought: Uint128,
     pub total_paid: Uint128,
+    pub total_claimed: Uint128,
     pub price: Decimal,
     pub timestamp: Timestamp,
     pub batches: Vec<Batch>,

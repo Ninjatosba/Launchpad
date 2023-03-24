@@ -1,5 +1,3 @@
-
-
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Decimal, Timestamp, Uint128};
 use cw_storage_plus::{Item, Map};
@@ -58,6 +56,7 @@ pub struct Position {
     pub address: Addr,
     pub total_bought: Uint128,
     pub total_paid: Uint128,
+    pub total_claimed: Uint128,
     pub price: Decimal,
     pub timestamp: Timestamp,
 

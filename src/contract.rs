@@ -141,6 +141,7 @@ pub fn execute_buy(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
                 address: info.sender.clone(),
                 total_bought: buy_amount,
                 total_paid: amount_paid,
+                total_claimed: Uint128::zero(),
                 price: config.price,
                 timestamp: env.block.time,
                 batches,
@@ -348,14 +349,15 @@ pub fn execute_claim(
         .retain(|batch| batch.release_time >= env.block.time);
 
     // save position
-    POSITIONS.save(deps.storage, info.sender.clone(), &position)?;
 
     // calculate total amount to claim
     let total_amount: Uint128 = mature_claims
         .into_iter()
         .map(|batch| batch.amount)
         .sum::<Uint128>();
+    position.total_claimed += total_amount;
 
+    POSITIONS.save(deps.storage, info.sender.clone(), &position)?;
     let claim_asset = Asset::cw20(config.sell_denom, total_amount);
     let claim_msg = claim_asset.transfer_msg(info.sender)?;
 
@@ -409,6 +411,7 @@ pub fn query_position(deps: Deps, address: String) -> StdResult<QueryPositionRes
         address: position.address.to_string(),
         total_bought: position.total_bought,
         total_paid: position.total_paid,
+        total_claimed: position.total_claimed,
         price: position.price,
         timestamp: position.timestamp,
         batches: position.batches,

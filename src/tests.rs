@@ -281,6 +281,7 @@ mod tests {
         .unwrap();
         // Now User has 9 batches of cw20 tokens
         assert_eq!(position.batches.len(), 9);
+        assert_eq!(position.total_claimed, Uint128::from(887u128));
         assert_eq!(position.batches[0].amount, Uint128::from(887u128));
         assert_eq!(
             position.batches[0].release_time,
@@ -306,5 +307,20 @@ mod tests {
             }),
             res.messages[0].msg
         );
+        // check batches
+        let position: QueryPositionResponse = from_binary(
+            &query(
+                deps.as_ref(),
+                mock_env(),
+                QueryMsg::QueryPosition {
+                    address: "buyer".to_string(),
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        // Now User has 0 batches of cw20 tokens
+        assert_eq!(position.batches.len(), 0);
+        assert_eq!(position.total_claimed, Uint128::from(8870u128));
     }
 }
