@@ -14,7 +14,6 @@ pub fn create_batches(
     release_time: Timestamp,
 ) -> Result<Bathces, ContractError> {
     let mut batches: Bathces = vec![];
-    println!("batch_duration: {:?}", batch_duration);
     // Create batches as per batch_amount
     let amount_per_batch = amount.checked_div(batch_amount)?;
     for i in 0..batch_amount.into() {
